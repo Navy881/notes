@@ -64,6 +64,77 @@ public interface RequestHandler<I, O> {
 
 ## **Развертывание RESTful-сервиса с помощью AWS Lambda и AWS Gateway**
 
+Давайте посмотрим, как развернуть сервис с помощью AWS Lambda. У этого сервиса есть REST API. Он не ис­пользует долгоживущих соединений с Apache Kafka, что делает его хорошим канди­датом для запуска в AWS Lambda. Процесс его развертывания показан на рис. 12.13. Сервис состоит из нескольких лямбда-функций, по одной для каждой конечной точки REST. За направление запросов к этим функциям отвечает API-шлюз AWS.
+
+![image.png](Serverless%20deployment%20(%D0%91%D0%B5%D1%81%D1%81%D0%B5%D1%80%D0%B2%D0%B5%D1%80%D0%BD%D0%BE%D0%B5%20%D1%80%D0%B0%D0%B7%D0%B2%D0%B5%D1%80%D1%82%D1%8B%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5)/image.png)
+
+Каждая лямбда-функция содержит класс для обработки запросов. Функция ftgo-create-restaurant вызывает класс CreateRestaurantRequestHandler, a ftgo-find-restaurant — класс FindRestaurantRequestHandler. Поскольку эти классы реализуют тесно связанные аспекты одного и того же сервиса, они упаковываются в один ZIP-файл restaurant-service-aws-lambda.zip.
+
+### Архитектура сервиса Restaurant на основе AWS Lambda
+
+Архитектура, представленная на рис. 12.14, довольно сильно напоминает тради­ционный сервис. Основное отличие в том, что вместо контроллеров Spring MVC используются классы для обработки запросов из AWS Lambda. Остальная бизнес-логика осталась неизменной.
+
+![image.png](Serverless%20deployment%20(%D0%91%D0%B5%D1%81%D1%81%D0%B5%D1%80%D0%B2%D0%B5%D1%80%D0%BD%D0%BE%D0%B5%20%D1%80%D0%B0%D0%B7%D0%B2%D0%B5%D1%80%D1%82%D1%8B%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5)/image%201.png)
+
+Сервис состоит из уровня представления, в который входят классы-обработчики, вызываемые платформой AWS Lambda для обработки НТТР-запросов, и традиционного уровня бизнес-логики. Последний содержит JPA-сущность RestaurantService и слой абстракции для базы данных RestaurantRepository.
+
+### Класс FindRestaurantRequestHandler
+
+Класс FindRestaurantRequestHandler реализует конечную точку GET /restaurant/(restaurantld). Этот и другие классы-обработчики являются листьями иерархии классов (рис. 12.15). Корнем иерархии служит класс RequestHandler, входящий в состав AWS SDK. Его абстрактные классы обрабатывают ошибки и внедряют зависимости.
+
+![image.png](Serverless%20deployment%20(%D0%91%D0%B5%D1%81%D1%81%D0%B5%D1%80%D0%B2%D0%B5%D1%80%D0%BD%D0%BE%D0%B5%20%D1%80%D0%B0%D0%B7%D0%B2%D0%B5%D1%80%D1%82%D1%8B%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5)/image%202.png)
+
+AbstractHttpHandler — это базовый абстрактный класс для обработчиков НТТР- запросов. Он перехватывает необработанные исключения, сгенерированные во время обработки запроса, и возвращает ответ вида 500 internal server error. 
+
+Класс AbstractAutowiringHttpRequestHandler реализует внедрение зависимостей для об­работчиков запросов.
+
+Класс FindRestaurantRequestHandler со­держит метод handleHttpRequest(), который принимает в качестве параметра объект APIGatewayProxyRequestEvent, представляющий HTTP-запрос. Он вызы­вает RestaurantService, чтобы найти ресторан, и возвращает APIGatewayProxyResponseEvent с описанием НТТР-ответа.
+
+### Упаковывание сервиса в виде ZIP-файла
+
+Прежде чем развертывать сервис, мы должны упаковать его в ZIP-файл. Имея ZIP-файл, мы можем приступить к развертыванию лямбда-функции.
+
+### Развертывание лямбда-функций с помощью бессерверного фреймворка
+
+Развертывание лямбда-функций и настройка API-шлюза могут оказаться довольно утомительными, если ограничиваться лишь инструментами, входящими в состав AWS. К счастью, этот процесс можно существенно упростить, если воспользоваться проектом с открытым исходным кодом под названием Serverless. Вам достаточно написать простой файл serverless.yml со списком своих лямбда-функций и их конечных точек RESTful, a Serverless автоматически их развернет и создаст, а также сконфигурирует API-шлюз, чтобы тот направлял к ним запросы.
+В листинге 12.12 показан фрагмент файла serverless.yml, который развертывает сервис Restaurant в виде лямбда-функций.
+
+**Листинг 12.12.** serverless.yml развертывает сервис Restaurant
+
+```yaml
+service: ftgo-application-lambda
+provider:
+	name: aws ◄--- Говорит Serverless, что развертывать нужно в AWS
+	runtime: java8
+	timeout: 35
+	region: ${env:AWS_REGION}
+	stage: dev
+	environment: ◄--- Предоставляет сервису внешнюю конфигурацию в виде переменных окружения
+		SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.jdbe.Driver
+		SPRING_DATASOURCE_URL: ...
+		SPRING_DATASOURCE_USERNAME: ...
+		SPRING_DATASOURCE_PASSWORD: ...
+
+package: ◄--- ZIP-файл с лямбда-функциями
+	artifact: ftgo-restaurant-service-aws-lambda/build/distributions/ftgo-restaurant-service-aws-lambda.zip
+
+functions: ◄--- Определения лямбда-функций, состоящие из функций обработки и конечных точек
+	create-restaurant:
+		handler: net.chrisrichardson.ftgo.restaurantservice.lambda .CreateRestaurantRequestHandler
+		events:
+		- http:
+				path: restaurants
+				method: post
+	find-restaurant:
+		handler: net.chrisrichardson.ftgo.restaurantservice.lambda .FindRestaurantRequestHandler
+		events:
+			- http:
+					path: restaurants/{restaurantld}
+					method: get
+```
+
+Вслед за этим можно воспользоваться командой serverless deploy, которая считывает файл serverless.yml, развертывает лямбда-функции и конфигурирует API-шлюз AWS. После непродолжительного ожидания ваш сервис станет до­ступен через URL-адрес конечной точки API-шлюза. Количества экземпляров лямбда-функций сервиса Restaurant будет достаточно для того, чтобы справиться с нагрузкой. В случае изменения кода вы легко обновите свои лямбда-функции, пересобрав ZIP-файл и заново выполнив команду serverless deploy. И все это без каких-либо серверов!
+
 # Преимущества
 
 - Ни вы, как разра­ботчик, ни кто-нибудь другой в вашей организации не должны волноваться о ка­ких-либо аспектах серверов, виртуальных машин или контейнеров.

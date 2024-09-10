@@ -249,6 +249,12 @@ CREATE TABLE sc_events(
 );
 ```
 
+### Обновление таблицы в БД
+
+```sql
+ALTER TABLE users ADD COLUMN updated_at TIMESTAMP without time zone;
+```
+
 ### Удаление всех таблиц в БД
 
 ```sql
