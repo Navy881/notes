@@ -304,20 +304,34 @@ https://xtls.github.io/en/document/install.html#install-script
 	  "routing": {
 		"domainStrategy": "IPIfNonMatch",
 		"rules": [
-			  // 3.3 Проксирование трафика на зарубежные домены
-		  {
-			"type": "field",
-			"domain": ["geosite:geolocation-!cn"],
-			"outboundTag": "proxy"
-		  },
 		  // 3.1 Блокировка рекламных доменов
 		  {
 			"type": "field",
 			"domain": ["geosite:category-ads-all"],
 			"outboundTag": "block"
+		  },
+		  // 3.2 Прямое подключение для российских доменов
+		  {
+			"type": "field",
+			"domain": [
+			  "domain:ru",
+			  "domain:рф",
+			  "domain:su"
+			],
+			"outboundTag": "direct"
+		  },
+		  // 3.3 Проксирование трафика на зарубежные домены
+		  {
+			"type": "field",
+			"domain": [
+			  "domain:!ru",
+			  "domain:!рф",
+			  "domain:!su"
+			],
+			"outboundTag": "proxy"
 		  }
 		  // 3.6 Правило по умолчанию
-		  // В Xray любой трафик, который не соответствует ни одному из правил маршрутизации, отправляется на первое исходящее подключение (см. раздел 5.1). Поэтому важно разместить настройки прокси-сервера на первом месте.
+		  // В Xray любой трафик, который не соответствует ни одному из правил маршрутизации, отправляется на первое исходящее подключение (см. раздел 5.1). Поэтому важно разместить настройки прокси-сервера на первом месте.сте.
 		]
 	  },
 
@@ -372,10 +386,10 @@ https://xtls.github.io/en/document/install.html#install-script
 			  "serverName": "bsikpg.duckdns.org", // Замените на доменное имя вашего сервера
 			  "allowInsecure": false, // Запретить использование недоверенных сертификатов
 			  "fingerprint": "chrome" // Использовать uTLS для подмены отпечатка браузера Chrome / Firefox / Safari или случайный отпечаток
-			},
-			"httpSettings": {
-				"path": "/ray"  // Указываем путь /ray для маршрутизации через Nginx
 			}
+			//"httpSettings": {
+			//	"path": "/ray"  // Указываем путь /ray для маршрутизации через Nginx
+			//}
 		  }
 		},
 		// 5.2 Прямое подключение
