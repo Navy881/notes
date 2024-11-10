@@ -154,3 +154,269 @@
 1. Найти кэш по пути `/var/cache/nginx/`
 2. Удалить кэш `-rf /var/cache/nginx/`
 3. Перезапустить Nginx `sudo service nginx restart`
+
+
+### Настройки Nginx
+```bash
+limit_req_zone $binary_remote_addr zone=one:10m rate=100r/s;
+server_tokens off;
+
+server {
+    listen 80;
+    server_name bsikpg.duckdns.org;
+    return 301 https://$host$request_uri;
+    #root /usr/share/nginx/html;
+    #index pages/transactions/index.html;
+}
+
+
+# fallback для xray
+server {
+    listen 127.0.0.1:8081;
+    server_name bsikpg.duckdns.org;
+    root /home/vpsadmin/www/webpage;
+    index index.html;
+    add_header Strict-Transport-Security "max-age=63072000" always;
+}
+
+
+server {
+    listen          443 ssl;
+    server_name     bsikpg.duckdns.org;
+    access_log      /var/log/nginx/example.com_access.log combined;
+    error_log       /var/log/nginx/example.com_error.log error;
+
+    #ssl_certificate         /etc/letsencrypt/live/bsikpg.duckdns.org-0001/fullchain.pem;
+    #ssl_certificate_key     /etc/letsencrypt/live/bsikpg.duckdns.org-0001/privkey.pem;
+    ssl_certificate         /etc/letsencrypt/acme/bsikpg.duckdns.org/fullchain.crt;
+    ssl_certificate_key     /etc/letsencrypt/acme/bsikpg.duckdns.org/cert.key;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384";
+
+    #root /usr/share/nginx/html;
+    #index pages/transactions/index.html;
+
+    location / {
+	limit_req       zone=one burst=100 nodelay;
+	
+	root /usr/share/nginx/html;
+	index pages/transactions/index.html;
+
+	# Для получения страниц из подкаталогов
+	try_files $uri $uri/ =404;
+
+	proxy_set_header   Host              $http_host;
+	proxy_set_header   X-Real-IP         $remote_addr;
+	proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+
+	add_header 'Access-Control-Allow-Origin' '*';
+	add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT';
+	add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization';
+	add_header 'Access-Control-Max-Age' 1728000;
+
+	if ($request_method = 'OPTIONS') {
+		add_header 'Access-Control-Allow-Origin' '*';
+		add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT';
+        #
+        # Custom headers and headers various browsers *should* be OK with but aren't
+        #
+		add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization';
+        #
+        # Tell client that this pre-flight info is valid for 20 days
+        #
+		add_header 'Access-Control-Max-Age' 1728000;
+		add_header 'Content-Type' 'text/plain; charset=utf-8';
+		add_header 'Content-Length' 0;
+		return 204;
+	}
+	if ($request_method = 'POST') {
+		add_header 'Access-Control-Allow-Origin' '*' always;
+		add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT' always;
+		add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+		add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+	}
+	if ($request_method = 'GET') {
+		add_header 'Access-Control-Allow-Origin' '*' always;
+		add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT' always;
+		add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+		add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+	}
+	if ($request_method = 'PUT') {
+                add_header 'Access-Control-Allow-Origin' '*' always;
+                add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT' always;
+                add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+                add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+        }
+    }
+
+    location ~ ^/(api/|confirm|changePassword) {
+	limit_req       zone=one burst=100 nodelay;
+
+        #include         uwsgi_params;
+        #uwsgi_pass      0.0.0.0:5000;
+	proxy_pass	 http://0.0.0.0:5000;
+
+	proxy_set_header   Host              $http_host;
+	proxy_set_header   X-Real-IP         $remote_addr;
+	proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+
+	add_header 'Access-Control-Allow-Origin' '*';
+	add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE';
+	add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization';
+	#add_header 'Access-Control-Allow-Headers' 'Content-Type';
+	add_header 'Access-Control-Max-Age' 1728000;
+
+	if ($request_method = 'OPTIONS') {
+		add_header 'Access-Control-Allow-Origin' '*';
+		add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE';
+        #
+        # Custom headers and headers various browsers *should* be OK with but aren't
+        #
+		add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization';
+        #
+        # Tell client that this pre-flight info is valid for 20 days
+        #
+		add_header 'Access-Control-Max-Age' 1728000;
+		add_header 'Content-Type' 'text/plain; charset=utf-8';
+		add_header 'Content-Length' 0;
+		return 204;
+	}
+	if ($request_method = 'POST') {
+		add_header 'Access-Control-Allow-Origin' '*' always;
+		add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
+		add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+		add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+	}
+	if ($request_method = 'GET') {
+		add_header 'Access-Control-Allow-Origin' '*' always;
+		add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
+		add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+		add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+	}
+	if ($request_method = 'PUT') {
+                add_header 'Access-Control-Allow-Origin' '*' always;
+                add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
+                add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+                add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+        }
+        if ($request_method = 'DELETE') {
+                add_header 'Access-Control-Allow-Origin' '*' always;
+                add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
+                add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+                add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+        }
+
+    }
+
+    location /docs {
+        limit_req       zone=one;
+
+        if ($http_secret_key != "") {
+            return 403;
+        }
+
+	proxy_pass	http://0.0.0.0:5000;
+
+        proxy_set_header   Host              $http_host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+   }
+
+    location /openapi.json {
+        limit_req       zone=one;
+
+        if ($http_secret_key != "") {
+            return 403;
+        }
+
+        proxy_pass      http://0.0.0.0:5000;
+
+        proxy_set_header   Host              $http_host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+   }
+
+    # Прокси для Xray
+    location /ray {
+        proxy_redirect off;
+        proxy_pass http://127.0.0.1:8080;  # Используем порт 8080 для Xray fallback
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+
+server {
+    listen          443 ssl;
+    server_name     grafana.bsikpg.duckdns.org;
+    access_log      /var/log/nginx/example.com_access.log combined;
+    error_log       /var/log/nginx/example.com_error.log error;
+
+    ssl_certificate         /etc/letsencrypt/live/bsikpg.duckdns.org-0001/fullchain.pem;
+    ssl_certificate_key     /etc/letsencrypt/live/bsikpg.duckdns.org-0001/privkey.pem;
+
+    location / {
+	limit_req  zone=one;	
+
+        proxy_pass  http://0.0.0.0:3000/;
+
+        proxy_set_header   Host              $http_host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    }
+
+}
+
+
+server {
+    listen          443 ssl;
+    server_name     c4.bsikpg.duckdns.org;
+    access_log      /var/log/nginx/example.com_access.log combined;
+    error_log       /var/log/nginx/example.com_error.log error;
+
+    ssl_certificate         /etc/letsencrypt/live/bsikpg.duckdns.org-0001/fullchain.pem;
+    ssl_certificate_key     /etc/letsencrypt/live/bsikpg.duckdns.org-0001/privkey.pem;
+
+    location / {
+	limit_req  zone=one;
+
+        proxy_pass  http://0.0.0.0:5001/;
+
+        proxy_set_header   Host              $http_host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    }
+
+}
+
+
+server {
+    listen          443 ssl;
+    server_name     twebapp.bsikpg.duckdns.org;
+    access_log      /var/log/nginx/example.com_access.log combined;
+    error_log       /var/log/nginx/example.com_error.log error;
+
+    ssl_certificate         /etc/letsencrypt/live/bsikpg.duckdns.org-0001/fullchain.pem;
+    ssl_certificate_key     /etc/letsencrypt/live/bsikpg.duckdns.org-0001/privkey.pem;
+
+    location / {
+	limit_req  zone=one;
+
+        proxy_pass  http://0.0.0.0:5003/;
+
+        proxy_set_header   Host              $http_host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    }
+
+}
+
+
+```
